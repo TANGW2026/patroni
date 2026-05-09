@@ -1,6 +1,6 @@
 ## This Dockerfile is meant to aid in the building and debugging patroni whilst developing on your local machine
 ## It has all the necessary components to play/debug with a single node appliance, running etcd
-ARG PG_MAJOR=16
+ARG PG_MAJOR=17
 ARG COMPRESS=false
 ARG PGHOME=/home/postgres
 ARG PGDATA=$PGHOME/data
@@ -26,6 +26,7 @@ RUN set -ex \
             | xargs apt-get install -y vim curl less jq locales haproxy sudo \
                             python3-etcd python3-kazoo python3-pip busybox \
                             net-tools iputils-ping dumb-init --fix-missing \
+			    postgis postgresql-17-postgis-3 \
 \
     # Cleanup all locales but en_US.UTF-8
     && find /usr/share/i18n/charmaps/ -type f ! -name UTF-8.gz -delete \
