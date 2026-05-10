@@ -169,7 +169,50 @@ RUN sed -i 's/env python/&3/' /patroni*.py \
     && sed -i 's/^\(.*\) \(.*\) md5/\1 all md5/' postgres?.yml \
     && if [ "$COMPRESS" = "true" ]; then chmod u+s /usr/bin/sudo; fi \
     && chmod +s /bin/ping \
-    && chown -R postgres:postgres "$PGHOME" /run /etc/haproxy
+    && chown -R postgres:postgres "$PGHOME" /run /etc/haproxy \
+
+# -------------------------------------------------------------------
+# pg_rewind wrapper
+# -------------------------------------------------------------------
+
+USER root
+
+RUN mkdir -p /var/log/pgrewind \
+    && touch /var/log/pgrewind/pg_rewind.log \
+    && chown -R postgres:postgres /var/log/pgrewind
+
+RUN cat > /usr/local/bin/pg_rewind <<'WRAPPER_EOF'
+#!/bin/bash
+
+REAL_PG_REWIND="__PGBIN__/pg_rewind"
+
+LOG_FILE=/var/log/pgrewind/pg_rewind.log
+START=$(date +%s)
+
+{
+echo "=================================================="
+echo "$(date) pg_rewind started"
+echo "ARGS: $@"
+
+"$REAL_PG_REWIND" \
+    --progress \
+    --debug \
+    "$@"
+
+RET=$?
+END=$(date +%s)
+
+echo "pg_rewind exit_code=$RET"
+echo "TOTAL_SECONDS=$((END-START))"
+echo ""
+
+exit $RET
+
+} 2>&1 | tee -a $LOG_FILE
+WRAPPER_EOF
+
+RUN sed -i "s#__PGBIN__#$PGBIN#g" /usr/local/bin/pg_rewind \
+    && chmod +x /usr/local/bin/pg_rewind
 
 USER postgres
 
