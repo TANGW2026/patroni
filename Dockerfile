@@ -181,10 +181,12 @@ RUN mkdir -p /var/log/pgrewind \
     && touch /var/log/pgrewind/pg_rewind.log \
     && chown -R postgres:postgres /var/log/pgrewind
 
-RUN cat > /usr/local/bin/pg_rewind <<'WRAPPER_EOF'
+RUN mv $PGBIN/pg_rewind $PGBIN/pg_rewind.real
+
+RUN cat > $PGBIN/pg_rewind <<'WRAPPER_EOF'
 #!/bin/bash
 
-REAL_PG_REWIND="__PGBIN__/pg_rewind"
+REAL_PG_REWIND="__PGBIN__/pg_rewind.real"
 
 LOG_FILE=/var/log/pgrewind/pg_rewind.log
 START=$(date +%s)
@@ -209,10 +211,12 @@ echo ""
 exit $RET
 
 } 2>&1 | tee -a $LOG_FILE
+
+exit ${PIPESTATUS[0]}
 WRAPPER_EOF
 
-RUN sed -i "s#__PGBIN__#$PGBIN#g" /usr/local/bin/pg_rewind \
-    && chmod +x /usr/local/bin/pg_rewind
+RUN sed -i "s#__PGBIN__#$PGBIN#g" $PGBIN/pg_rewind \
+    && chmod +x $PGBIN/pg_rewind
 
 USER postgres
 
