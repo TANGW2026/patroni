@@ -181,42 +181,67 @@ RUN mkdir -p /var/log/pgrewind \
     && touch /var/log/pgrewind/pg_rewind.log \
     && chown -R postgres:postgres /var/log/pgrewind
 
+# backup original pg_rewind
 RUN mv $PGBIN/pg_rewind $PGBIN/pg_rewind.real
 
+# create wrapper
 RUN cat > $PGBIN/pg_rewind <<'WRAPPER_EOF'
 #!/bin/bash
 
 REAL_PG_REWIND="__PGBIN__/pg_rewind.real"
-
 LOG_FILE=/var/log/pgrewind/pg_rewind.log
+
+#
+# Patroni capability check
+#
+# Patroni periodically executes:
+#   pg_rewind --help
+#   pg_rewind --version
+#
+# We must NOT interfere with exit codes here,
+# otherwise Patroni thinks pg_rewind is unavailable.
+#
+if [[ "$1" == "--help" ]] || [[ "$1" == "--version" ]]; then
+    exec "$REAL_PG_REWIND" "$@"
+fi
+
 START=$(date +%s)
 
 {
-echo "=================================================="
-echo "$(date) pg_rewind started"
-echo "ARGS: $@"
+    echo "=================================================="
+    echo "$(date) pg_rewind started"
+    echo "ARGS: $@"
+    echo ""
 
-"$REAL_PG_REWIND" \
-    --progress \
-    --debug \
-    "$@"
+    "$REAL_PG_REWIND" \
+        --progress \
+        --debug \
+        "$@"
 
-RET=$?
-END=$(date +%s)
+    RET=$?
 
-echo "pg_rewind exit_code=$RET"
-echo "TOTAL_SECONDS=$((END-START))"
-echo ""
+    END=$(date +%s)
 
-exit $RET
+    echo ""
+    echo "pg_rewind exit_code=$RET"
+    echo "TOTAL_SECONDS=$((END-START))"
+    echo "=================================================="
+    echo ""
 
-} 2>&1 | tee -a $LOG_FILE
+    exit $RET
 
+} 2>&1 | tee -a "$LOG_FILE"
+
+#
+# preserve real pg_rewind exit code
+#
 exit ${PIPESTATUS[0]}
 WRAPPER_EOF
 
+# replace placeholder + permissions
 RUN sed -i "s#__PGBIN__#$PGBIN#g" $PGBIN/pg_rewind \
-    && chmod +x $PGBIN/pg_rewind
+    && chmod +x $PGBIN/pg_rewind \
+    && chmod +x /patroni*.py /entrypoint.sh
 
 USER postgres
 
